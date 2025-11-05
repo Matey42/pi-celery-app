@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: pi_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 15
+
+  api:
+    build:
+      context: ./api
+    container_name: pi_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api:/app
+    depends_on:
+      - redis:
+          condition: service_healthy
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - UVICORN_WORKERS=2
+    command: uvicorn app:app --host 0.0.0.0 --port 8000
+
+  worker:
+    build:
+      context: ./api
+    container_name: pi_worker
+    volumes:
+      - ./api:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      - redis:
+          condition: service_healthy
+    command: celery -A tasks.celery_app worker --loglevel=info
+
+  flower:
+    build:
+      context: ./api
+    container_name: pi_flower
+    volumes:
+      - ./api:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      - redis:
+          condition: service_healthy
+    ports:
+      - "5555:5555"
+    command: celery -A tasks.celery_app flower --address=0.0.0.0 --port=5555
+
+networks:
+  default:
+    name: pi_network
