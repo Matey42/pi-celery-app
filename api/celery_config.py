@@ -12,8 +12,7 @@ def make_celery() -> Celery:
 		backend=result_backend,
 		include=["tasks"],
 	)
-
-	# Sensible defaults; tweak as needed
+	
 	celery.conf.update(
 		task_track_started=True,
 		result_expires=3600,
